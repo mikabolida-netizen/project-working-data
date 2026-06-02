@@ -27,11 +27,18 @@ export async function getMenuItems() {
   });
 }
 
+// 2. Implement a single SQL statement to save all menu data in a table called menuitems.
 export function saveMenuItems(menuItems) {
-  db.transaction((tx) => {
-    // 2. Implement a single SQL statement to save all menu data in a table called menuitems.
-    // Check the createTable() function above to see all the different columns the table has
-    // Hint: You need a SQL statement to insert multiple rows at once.
+  return new Promise((resolve, reject) => {
+    db.transaction((tx) => {
+      // Insert multiple rows using multiple SQL statements
+      menuItems.forEach((item) => {
+        tx.executeSql(
+          'insert into menuitems (uuid, title, price, category) values (?, ?, ?, ?);',
+          [item.id, item.title, item.price, item.category]
+        );
+      });
+    }, reject, resolve);
   });
 }
 
@@ -57,6 +64,36 @@ export function saveMenuItems(menuItems) {
  */
 export async function filterByQueryAndCategories(query, activeCategories) {
   return new Promise((resolve, reject) => {
-    resolve(SECTION_LIST_MOCK_DATA);
+    db.transaction((tx) => {
+      // Build the WHERE clause dynamically based on parameters
+      let whereClause = '1=1';
+      let params = [];
+
+      // Add search query filter (case-insensitive substring search)
+      if (query) {
+        whereClause += ' AND LOWER(title) LIKE ?';
+        params.push(`%${query.toLowerCase()}%`);
+      }
+
+      // Add category filter
+      if (activeCategories && activeCategories.length > 0) {
+        const placeholders = activeCategories.map(() => '?').join(',');
+        whereClause += ` AND category IN (${placeholders})`;
+        params.push(...activeCategories);
+      }
+
+      const sql = `SELECT * FROM menuitems WHERE ${whereClause}`;
+
+      tx.executeSql(
+        sql,
+        params,
+        (_, { rows }) => {
+          resolve(rows._array);
+        },
+        (_, error) => {
+          reject(error);
+        }
+      );
+    });
   });
 }
